@@ -1,0 +1,25 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  base_url: "/"
+
+database:
+  path: "./lid.db"
+
+auth:
+  jwt_secret: "change-this-in-production"
+  session_days: 7
+  oidc:
+    enabled: false
+    provider_url: ""
+    client_id: ""
+    client_secret: ""
+    scopes:
+      - "openid"
+      - "email"
+      - "profile"
+
+demo:
+  enabled: true
+  username: "admin"
+  password: "admin123"
