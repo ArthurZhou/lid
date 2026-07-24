@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>lid — File Share</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117;
+    --bg2: #1a1d27;
+    --bg3: #252a38;
+    --border: #2e3344;
+    --text: #e2e8f0;
+    --text2: #8892a8;
+    --accent: #4f8ef7;
+    --accent2: #6ba6ff;
+    --danger: #e05252;
+    --success: #4caf7d;
+    --radius: 8px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent2); }
+
+  /* ---- Auth ---- */
+  #login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 40px; width: 360px; }
+  .login-box h1 { font-size: 24px; margin-bottom: 8px; }
+  .login-box p { color: var(--text2); font-size: 13px; margin-bottom: 28px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+  .form-group input { width: 100%; padding: 9px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 14px; outline: none; }
+  .form-group input:focus { border-color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 18px; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: opacity .15s; }
+  .btn:hover { opacity: 0.88; }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .error-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; display: none; }
+  .oidc-btn { width: 100%; margin-top: 12px; }
+
+  /* ---- Layout ---- */
+  #app { display: none; }
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: 220px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .sidebar-header { padding: 18px 16px 12px; border-bottom: 1px solid var(--border); }
+  .sidebar-header h2 { font-size: 16px; color: var(--accent); }
+  .sidebar-header span { font-size: 11px; color: var(--text2); }
+  .sidebar-nav { padding: 12px 0; flex: 1; }
+  .sidebar-nav a { display: flex; align-items: center; gap: 8px; padding: 9px 16px; color: var(--text2); font-size: 13px; cursor: pointer; }
+  .sidebar-nav a:hover, .sidebar-nav a.active { background: var(--bg3); color: var(--text); }
+  .sidebar-nav a .icon { font-size: 16px; }
+  .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); }
+
+  /* ---- Main ---- */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .topbar-title { font-size: 15px; font-weight: 600; }
+  .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); margin-bottom: 16px; padding: 12px 24px 0; }
+  .breadcrumb span { cursor: pointer; }
+  .breadcrumb span:hover { color: var(--text); }
+  .content { flex: 1; overflow: auto; padding: 16px 24px 24px; }
+
+  /* ---- File List ---- */
+  .file-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .file-toolbar .btn { position: relative; }
+  .file-list { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .file-row { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13px; transition: background .1s; }
+  .file-row:last-child { border-bottom: none; }
+  .file-row:hover { background: var(--bg2); }
+  .file-row .icon { margin-right: 10px; font-size: 18px; }
+  .file-row .icon.folder { color: #f0c44a; }
+  .file-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-row .size { color: var(--text2); font-size: 12px; width: 80px; text-align: right; margin-right: 16px; }
+  .file-row .modified { color: var(--text2); font-size: 12px; width: 140px; }
+
+  .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+  .folder-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .folder-card:hover { border-color: var(--accent); background: var(--bg3); }
+  .folder-card .icon { font-size: 48px; }
+  .folder-card .name { font-size: 13px; text-align: center; word-break: break-word; }
+
+  /* ---- Admin ---- */
+  .admin-section { margin-bottom: 40px; }
+  .admin-section h3 { font-size: 14px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 12px; font-size: 12px; color: var(--text2); border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: var(--bg2); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: var(--bg3); color: var(--text2); }
+  .tag.admin { background: #2a3a5c; color: var(--accent2); }
+
+  /* ---- Modal ---- */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; width: 440px; max-width: 90vw; }
+  .modal h3 { margin-bottom: 18px; font-size: 16px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .modal-actions .btn { min-width: 80px; }
+
+  /* ---- Upload ---- */
+  #upload-input { display: none; }
+
+  /* ---- Misc ---- */
+  .empty { text-align: center; padding: 60px 20px; color: var(--text2); }
+  .loading { text-align: center; padding: 40px; color: var(--text2); }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--border); padding: 10px 18px; border-radius: var(--radius); font-size: 13px; z-index: 200; display: none; }
+  .toast.show { display: block; }
+  .toast.success { border-color: var(--success); }
+  .toast.error { border-color: var(--danger); }
+
+  @media (max-width: 700px) {
+    .sidebar { width: 60px; }
+    .sidebar-header h2, .sidebar-header span, .sidebar-nav a span:last-child, .sidebar-footer { display: none; }
+    .file-row .size, .file-row .modified { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN PAGE ===== -->
+<div id="login-page">
+  <div class="login-box">
+    <h1>lid</h1>
+    <p>Lightweight file sharing server</p>
+    <div class="error-msg" id="login-error"></div>
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="username" autocomplete="username" required/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" autocomplete="current-password" required/>
+      </div>
+      <button type="submit" class="btn btn-primary">Sign in</button>
+    </form>
+    <button class="btn btn-ghost oidc-btn" id="oidc-btn" style="display:none" onclick="handleOidcLogin()">Login with SSO</button>
+  </div>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app">
+  <div class="layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>lid</h2>
+        <span id="user-display">—</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a onclick="navigate('files')" id="nav-files" class="active">
+          <span class="icon">📁</span><span>Files</span>
+        </a>
+        <a onclick="navigate('admin')" id="nav-admin" style="display:none">
+          <span class="icon">⚙️</span><span>Admin</span>
+        </a>
+        <a onclick="handleLogout()">
+          <span class="icon">🚪</span><span>Logout</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div id="admin-badge" style="display:none">admin</div>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="main">
+      <!-- Files view -->
+      <div id="view-files">
+        <div class="topbar">
+          <span class="topbar-title">Files</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="showUploadModal()">↑ Upload</button>
+            <button class="btn btn-ghost btn-sm" onclick="showMkdirModal()">+ Folder</button>
+          </div>
+        </div>
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="content">
+          <div class="loading" id="loading-files">Loading...</div>
+          <div id="file-list-container"></div>
+        </div>
+      </div>
+
+      <!-- Admin view -->
+      <div id="view-admin" style="display:none">
+        <div class="topbar">
+          <span class="topbar-title">Admin Panel</span>
+        </div>
+        <div class="content">
+          <!-- Paths -->
+          <div class="admin-section">
+            <h3>Storage Paths</h3>
+            <div style="margin-bottom:10px">
+              <button class="btn btn-ghost btn-sm" onclick="showAddPathModal()">+ Add Path</button>
+            </div>
+            <div class="file-list">
+              <table id="paths-table">
+                <thead><tr><th>Display Name</th><th>Server Path</th><th>Public</th><th>Actions</th></tr></thead>
+                <tbody id="paths-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Users -->
+          <div class="admin-section">
+            <h3>Users</h3>
+            <div style="margin-bottom:10px">
+              <button class="btn btn-ghost btn-sm" onclick="showAddUserModal()">+ Add User</button>
+            </div>
+            <table>
+              <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
+              <tbody id="users-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Groups -->
+          <div class="admin-section">
+            <h3>Groups</h3>
+            <div style="margin-bottom:10px">
+              <button class="btn btn-ghost btn-sm" onclick="showAddGroupModal()">+ Add Group</button>
+            </div>
+            <table>
+              <thead><tr><th>Name</th><th>Members</th><th>Actions</th></tr></thead>
+              <tbody id="groups-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Permissions -->
+          <div class="admin-section">
+            <h3>Permissions</h3>
+            <div style="margin-bottom:10px">
+              <button class="btn btn-ghost btn-sm" onclick="showGrantPermModal()">+ Grant</button>
+            </div>
+            <table>
+              <thead><tr><th>Principal</th><th>Path</th><th>Permission</th><th>Actions</th></tr></thead>
+              <tbody id="perms-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload modal -->
+<div class="modal-overlay" id="upload-modal">
+  <div class="modal">
+    <h3>Upload Files</h3>
+    <div style="margin-bottom:16px">
+      <input type="file" id="upload-input" multiple onchange="handleUpload(this.files)"/>
+      <button class="btn btn-ghost" onclick="document.getElementById('upload-input').click()">Select Files</button>
+      <span id="upload-filename" style="font-size:12px;color:var(--text2);margin-left:8px"></span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('upload-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mkdir modal -->
+<div class="modal-overlay" id="mkdir-modal">
+  <div class="modal">
+    <h3>New Folder</h3>
+    <div class="form-group">
+      <label>Folder name</label>
+      <input type="text" id="mkdir-name" placeholder="my-folder"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('mkdir-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="handleMkdir()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Grant permission modal -->
+<div class="modal-overlay" id="grant-modal">
+  <div class="modal">
+    <h3>Grant Permission</h3>
+    <div class="form-group">
+      <label>Type</label>
+      <select id="grant-type" style="width:100%;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;outline:none">
+        <option value="user">User</option>
+        <option value="group">Group</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Principal ID</label>
+      <input type="text" id="grant-principal" placeholder="user or group id"/>
+    </div>
+    <div class="form-group">
+      <label>Path ID</label>
+      <input type="text" id="grant-path" placeholder="path id"/>
+    </div>
+    <div class="form-group">
+      <label>Permission</label>
+      <select id="grant-perm" style="width:100%;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;outline:none">
+        <option value="read">read</option>
+        <option value="write">write</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('grant-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="handleGrant()">Grant</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add user modal -->
+<div class="modal-overlay" id="adduser-modal">
+  <div class="modal">
+    <h3>Add User</h3>
+    <div class="form-group"><label>Username</label><input type="text" id="new-user-name"/></div>
+    <div class="form-group"><label>Email</label><input type="email" id="new-user-email"/></div>
+    <div class="form-group"><label>Password</label><input type="password" id="new-user-pass"/></div>
+    <div class="form-group">
+      <label>Admin</label>
+      <input type="checkbox" id="new-user-admin"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('adduser-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="handleAddUser()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add path modal -->
+<div class="modal-overlay" id="addpath-modal">
+  <div class="modal">
+    <h3>Add Storage Path</h3>
+    <div class="form-group"><label>Display Name</label><input type="text" id="new-path-name"/></div>
+    <div class="form-group"><label>Server Path (absolute)</label><input type="text" id="new-path-server"/></div>
+    <div class="form-group"><label>Description</label><input type="text" id="new-path-desc"/></div>
+    <div class="form-group"><label>Public</label><input type="checkbox" id="new-path-public"/></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('addpath-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="handleAddPath()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ---- State ----
+let currentUser = null;
+let currentPathId = null;
+let currentSubPath = '';
+let pathHistory = []; // stack of {pathId, subPath}
+
+// ---- Init ----
+(async () => {
+  try {
+    const r = await fetch('/api/auth/me', { credentials: 'include' });
+    if (r.ok) {
+      const d = await r.json();
+      currentUser = d.data;
+      showApp();
+    } else {
+      showLogin();
+    }
+  } catch {
+    showLogin();
+  }
+  checkOidcButton();
+})();
+
+function checkOidcButton() {
+  // OIDC button shown if oidc is configured (we try to load .well-known)
+  const btn = document.getElementById('oidc-btn');
+  btn.style.display = 'none'; // hide by default, enabled when OIDC is detected
+}
+
+// ---- Auth ----
+async function handleLogin(e) {
+  e.preventDefault();
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const d = await r.json();
+    if (!r.ok) { err.textContent = d.error || 'Login failed'; err.style.display = 'block'; return; }
+    currentUser = d.data;
+    showApp();
+  } catch (e) { err.textContent = 'Network error'; err.style.display = 'block'; }
+}
+
+function handleOidcLogin() {
+  window.location.href = '/api/auth/oidc/login';
+}
+
+async function handleLogout() {
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  currentUser = null;
+  showLogin();
+}
+
+async function api(endpoint, opts = {}) {
+  const r = await fetch(endpoint, {
+    credentials: 'include',
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { showLogin(); throw new Error('unauth'); }
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'API error');
+  return d;
+}
+
+function showLogin() {
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('user-display').textContent = currentUser?.username || '';
+  document.getElementById('admin-badge').style.display = currentUser?.is_admin ? 'block' : 'none';
+  document.getElementById('nav-admin').style.display = currentUser?.is_admin ? 'flex' : 'none';
+  navigate('files');
+}
+
+// ---- Navigation ----
+function navigate(view) {
+  ['files','admin'].forEach(v => {
+    document.getElementById(`view-${v}`).style.display = 'none';
+    document.getElementById(`nav-${v}`).classList.remove('active');
+  });
+  document.getElementById(`view-${view}`).style.display = 'block';
+  document.getElementById(`nav-${view}`).classList.add('active');
+  if (view === 'files') loadRootPaths();
+  if (view === 'admin') loadAdmin();
+}
+
+// ---- Files ----
+async function loadRootPaths() {
+  document.getElementById('loading-files').style.display = 'block';
+  document.getElementById('file-list-container').innerHTML = '';
+  document.getElementById('breadcrumb').innerHTML = '<span>Root</span>';
+  currentPathId = null;
+  currentSubPath = '';
+  pathHistory = [];
+  try {
+    const d = await api('/api/files');
+    renderPathsGrid(d.data);
+  } catch (e) { showToast(e.message, 'error'); }
+  document.getElementById('loading-files').style.display = 'none';
+}
+
+function renderPathsGrid(paths) {
+  const c = document.getElementById('file-list-container');
+  if (!paths || paths.length === 0) {
+    c.innerHTML = '<div class="empty">No accessible paths. Ask your admin.</div>';
+    return;
+  }
+  c.innerHTML = `<div class="folder-grid" id="paths-grid"></div>`;
+  const grid = document.getElementById('paths-grid');
+  for (const p of paths) {
+    const card = document.createElement('div');
+    card.className = 'folder-card';
+    card.innerHTML = `<div class="icon">📁</div><div class="name">${escHtml(p.display_name)}</div>`;
+    card.onclick = () => openPath(p.id, '');
+    grid.appendChild(card);
+  }
+}
+
+async function openPath(pathId, subPath) {
+  document.getElementById('loading-files').style.display = 'block';
+  document.getElementById('file-list-container').innerHTML = '';
+  currentPathId = pathId;
+  currentSubPath = subPath;
+  try {
+    const url = subPath
+      ? `/api/files/${pathId}/browse/${subPath}`
+      : `/api/files/${pathId}`;
+    const d = await api(url);
+    renderFileList(d.data, pathId);
+    updateBreadcrumb(d.data.path || 'Files', pathId, subPath);
+  } catch (e) { showToast(e.message, 'error'); }
+  document.getElementById('loading-files').style.display = 'none';
+}
+
+function renderFileList(data, pathId) {
+  const c = document.getElementById('file-list-container');
+  const { entries, path: pathName } = data;
+  if (!entries || entries.length === 0) {
+    c.innerHTML = '<div class="empty">Empty directory</div>';
+    return;
+  }
+  c.innerHTML = `<div class="file-list" id="file-list"></div>`;
+  const list = document.getElementById('file-list');
+  for (const e of entries) {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    const icon = e.is_dir ? '📁' : fileIcon(e.name);
+    const iconClass = e.is_dir ? 'folder' : '';
+    const size = e.is_dir ? '—' : formatSize(e.size);
+    const modified = e.modified ? formatDate(e.modified) : '—';
+    row.innerHTML = `
+      <span class="icon ${iconClass}">${icon}</span>
+      <span class="name">${escHtml(e.name)}</span>
+      <span class="size">${size}</span>
+      <span class="modified">${modified}</span>
+    `;
+    if (e.is_dir) {
+      row.ondblclick = () => {
+        const newSub = currentSubPath ? `${currentSubPath}/${e.name}` : e.name;
+        openPath(pathId, newSub);
+      };
+    } else {
+      row.onclick = () => downloadFile(pathId, e.name);
+      row.ondblclick = null;
+    }
+    // Right-click context menu
+    row.oncontextmenu = (ev) => { ev.preventDefault(); showContextMenu(ev, e, pathId); };
+    list.appendChild(row);
+  }
+}
+
+function updateBreadcrumb(displayName, pathId, subPath) {
+  const bc = document.getElementById('breadcrumb');
+  const parts = subPath ? subPath.split('/') : [];
+  let html = `<span onclick="loadRootPaths()">Root</span>`;
+  if (displayName) html += ` → <span>${escHtml(displayName)}</span>`;
+  bc.innerHTML = html;
+}
+
+function downloadFile(pathId, filename) {
+  window.open(`/api/files/${pathId}/download/${filename}`, '_blank');
+}
+
+// ---- File actions ----
+async function handleMkdir() {
+  const name = document.getElementById('mkdir-name').value.trim();
+  if (!name) return;
+  try {
+    await api(`/api/files/${currentPathId}/mkdir`, {
+      method: 'POST', body: JSON.stringify({ name }),
+    });
+    closeModal('mkdir-modal');
+    document.getElementById('mkdir-name').value = '';
+    openPath(currentPathId, currentSubPath);
+    showToast('Folder created', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function showUploadModal() {
+  document.getElementById('upload-modal').classList.add('show');
+  const input = document.getElementById('upload-input');
+  input.onchange = () => {
+    document.getElementById('upload-filename').textContent = Array.from(input.files).map(f=>f.name).join(', ');
+  };
+}
+
+async function handleUpload(files) {
+  if (!files || files.length === 0) return;
+  closeModal('upload-modal');
+  const form = new FormData();
+  for (const f of files) form.append('file', f);
+  try {
+    const r = await fetch(`/api/files/${currentPathId}/upload`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Upload failed');
+    openPath(currentPathId, currentSubPath);
+    showToast(`Uploaded ${files.length} file(s)`, 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+  document.getElementById('upload-filename').textContent = '';
+}
+
+async function handleDelete(name) {
+  if (!confirm(`Delete "${name}"?`)) return;
+  try {
+    await api(`/api/files/${currentPathId}/${name}`, { method: 'DELETE' });
+    openPath(currentPathId, currentSubPath);
+    showToast('Deleted', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function handleRename(oldName) {
+  const newName = prompt(`Rename "${oldName}" to:`, oldName);
+  if (!newName || newName === oldName) return;
+  try {
+    await api(`/api/files/${currentPathId}/rename`, {
+      method: 'POST',
+      body: JSON.stringify({ old_name: oldName, new_name: newName }),
+    });
+    openPath(currentPathId, currentSubPath);
+    showToast('Renamed', 'success');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function showContextMenu(ev, entry, pathId) {
+  // Simple context menu using prompt/confirm for now
+  const action = prompt(`Action for "${entry.name}":\n1. Delete\n2. Rename\nEnter 1 or 2`);
+  if (action === '1') handleDelete(entry.name);
+  else if (action === '2') handleRename(entry.name);
+}
+
+// ---- Admin ----
+async function loadAdmin() {
+  try {
+    const [paths, users, groups, perms] = await Promise.all([
+      api('/api/admin/paths'),
+      api('/api/admin/users'),
+      api('/api/admin/groups'),
+      api('/api/admin/permissions'),
+    ]);
+    renderPathsTable(paths.data);
+    renderUsersTable(users.data);
+    renderGroupsTable(groups.data);
+    renderPermsTable(perms.data);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function renderPathsTable(paths) {
+  const tbody = document.getElementById('paths-tbody');
+  tbody.innerHTML = '';
+  for (const p of paths || []) {
+    tbody.innerHTML += `<tr>
+      <td>${escHtml(p.display_name)}</td>
+      <td><code style="font-size:11px">${escHtml(p.path)}</code></td>
+      <td>${p.is_public ? '✅' : '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removePath('${p.id}')">Remove</button></td>
+    </tr>`;
+  }
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = '';
+  for (const u of users || []) {
+    tbody.innerHTML += `<tr>
+      <td>${escHtml(u.username)}</td>
+      <td>${escHtml(u.email || '—')}</td>
+      <td>${u.is_admin ? '<span class="tag admin">admin</span>' : '<span class="tag">user</span>'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">Delete</button></td>
+    </tr>`;
+  }
+}
+
+function renderGroupsTable(groups) {
+  const tbody = document.getElementById('groups-tbody');
+  tbody.innerHTML = '';
+  for (const g of groups || []) {
+    tbody.innerHTML += `<tr>
+      <td>${escHtml(g.name)}</td>
+      <td>${g.member_count ?? '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteGroup('${g.id}')">Delete</button></td>
+    </tr>`;
+  }
+}
+
+function renderPermsTable(perms) {
+  const tbody = document.getElementById('perms-tbody');
+  tbody.innerHTML = '';
+  for (const p of perms || []) {
+    tbody.innerHTML += `<tr>
+      <td>${p.principal_type}:${escHtml(p.principal_id?.slice(0,8) || '')}</td>
+      <td>${escHtml(p.path_id || '—')}</td>
+      <td><span class="tag">${p.permission}</span></td>
+      <td><button class="btn btn-danger btn-sm" onclick="revokePerm('${p.id}')">Revoke</button></td>
+    </tr>`;
+  }
+}
+
+// Admin actions
+async function removePath(id) { await api(`/api/admin/paths/${id}`, {method:'DELETE'}); loadAdmin(); showToast('Path removed','success'); }
+async function deleteUser(id) { await api(`/api/admin/users/${id}`, {method:'DELETE'}); loadAdmin(); showToast('User deleted','success'); }
+async function deleteGroup(id) { await api(`/api/admin/groups/${id}`, {method:'DELETE'}); loadAdmin(); showToast('Group deleted','success'); }
+async function revokePerm(id) { await api(`/api/admin/permissions/${id}`, {method:'DELETE'}); loadAdmin(); showToast('Revoked','success'); }
+
+function showAddPathModal() { document.getElementById('addpath-modal').classList.add('show'); }
+async function handleAddPath() {
+  const display_name = document.getElementById('new-path-name').value.trim();
+  const path = document.getElementById('new-path-server').value.trim();
+  const description = document.getElementById('new-path-desc').value.trim();
+  const is_public = document.getElementById('new-path-public').checked;
+  if (!display_name || !path) return;
+  await api('/api/admin/paths', {method:'POST', body: JSON.stringify({display_name, path, description, is_public})});
+  closeModal('addpath-modal');
+  loadAdmin();
+  showToast('Path added','success');
+}
+
+function showAddUserModal() { document.getElementById('adduser-modal').classList.add('show'); }
+async function handleAddUser() {
+  const username = document.getElementById('new-user-name').value.trim();
+  const email = document.getElementById('new-user-email').value.trim();
+  const password = document.getElementById('new-user-pass').value;
+  const is_admin = document.getElementById('new-user-admin').checked;
+  if (!username || !password) return;
+  await api('/api/admin/users', {method:'POST', body: JSON.stringify({username, email, password, is_admin})});
+  closeModal('adduser-modal');
+  loadAdmin();
+  showToast('User created','success');
+}
+
+function showAddGroupModal() {
+  const name = prompt('Group name:');
+  if (!name) return;
+  api('/api/admin/groups', {method:'POST', body: JSON.stringify({name})}).then(()=>{ loadAdmin(); showToast('Group created','success'); }).catch(e=>showToast(e.message,'error'));
+}
+
+function showGrantPermModal() { document.getElementById('grant-modal').classList.add('show'); }
+async function handleGrant() {
+  const principal_type = document.getElementById('grant-type').value;
+  const principal_id = document.getElementById('grant-principal').value.trim();
+  const path_id = document.getElementById('grant-path').value.trim();
+  const permission = document.getElementById('grant-perm').value;
+  if (!principal_id || !path_id) return;
+  await api('/api/admin/permissions', {method:'POST', body: JSON.stringify({principal_type, principal_id, path_id, permission})});
+  closeModal('grant-modal');
+  loadAdmin();
+  showToast('Permission granted','success');
+}
+
+// ---- Utils ----
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B','KB','MB','GB','TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function formatDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts * 1000).toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+
+function fileIcon(name) {
+  const ext = name.split('.').pop()?.toLowerCase();
+  const map = {
+    pdf:'📄', doc:'📝', docx:'📝', txt:'📝', md:'📝',
+    jpg:'🖼️', jpeg:'🖼️', png:'🖼️', gif:'🖼️', webp:'🖼️', svg:'🖼️',
+    mp4:'🎬', mov:'🎬', avi:'🎬', mkv:'🎬',
+    mp3:'🎵', wav:'🎵', flac:'🎵',
+    zip:'📦', tar:'📦', gz:'📦', rar:'📦',
+    js:'💠', ts:'💠', py:'🐍', rs:'🦀', go:'🐹', java:'☕',
+    html:'🌐', css:'🎨', json:'📋', xml:'📋', yml:'⚙️', yaml:'⚙️',
+  };
+  return map[ext] || '📄';
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+function showToast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// Close modals on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
+  }
+});
+</script>
+</body>
+</html>
