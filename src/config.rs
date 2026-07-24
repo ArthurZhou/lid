@@ -108,6 +108,15 @@ pub fn load() -> Result<Config, Box<dyn std::error::Error>> {
         if path.exists() {
             let contents = std::fs::read_to_string(path)?;
             let config: Config = serde_yaml::from_str(&contents)?;
+
+            // Validate session_days is positive
+            if config.auth.session_days <= 0 {
+                return Err(format!(
+                    "auth.session_days must be positive, got {}",
+                    config.auth.session_days
+                ).into());
+            }
+
             tracing::info!("Loaded config from {}", p);
             return Ok(config);
         }

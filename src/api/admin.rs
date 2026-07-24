@@ -51,6 +51,13 @@ pub async fn create_user(
 ) -> Result<Json<Value>, AppError> {
     require_admin(&auth)?;
 
+    if payload.username.is_empty() {
+        return Err(AppError::BadRequest("Username is required".to_string()));
+    }
+    if payload.password.is_empty() {
+        return Err(AppError::BadRequest("Password is required".to_string()));
+    }
+
     let conn = pool.get()?;
 
     // Check if username already exists
@@ -99,6 +106,11 @@ pub async fn update_user(
 
     let conn = pool.get()?;
 
+    // Verify user exists before updating
+    if User::find_by_id(&conn, &user_id)?.is_none() {
+        return Err(AppError::NotFound(format!("User not found: {}", user_id)));
+    }
+
     User::update(&conn, &user_id, &payload.username, &payload.email, payload.is_admin)?;
 
     if let Some(ref pw) = payload.password {
@@ -126,6 +138,12 @@ pub async fn delete_user(
     }
 
     let conn = pool.get()?;
+
+    // Verify user exists before deleting
+    if User::find_by_id(&conn, &user_id)?.is_none() {
+        return Err(AppError::NotFound(format!("User not found: {}", user_id)));
+    }
+
     User::delete(&conn, &user_id)?;
 
     Ok(Json(json!({ "data": "user deleted" })))
@@ -295,6 +313,36 @@ pub async fn grant_permission(
     }
 
     let conn = pool.get()?;
+
+    // Verify path exists
+    if PathEntry::find_by_id(&conn, &payload.path_id)?.is_none() {
+        return Err(AppError::NotFound(format!(
+            "Path not found: {}",
+            payload.path_id
+        )));
+    }
+
+    // Verify principal exists
+    match payload.principal_type.as_str() {
+        "user" => {
+            if User::find_by_id(&conn, &payload.principal_id)?.is_none() {
+                return Err(AppError::NotFound(format!(
+                    "User not found: {}",
+                    payload.principal_id
+                )));
+            }
+        }
+        "group" => {
+            if Group::find_by_id(&conn, &payload.principal_id)?.is_none() {
+                return Err(AppError::NotFound(format!(
+                    "Group not found: {}",
+                    payload.principal_id
+                )));
+            }
+        }
+        _ => unreachable!(), // Already validated above
+    }
+
     let id = uuid::Uuid::new_v4().to_string();
 
     Permission::create(

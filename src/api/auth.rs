@@ -36,6 +36,10 @@ pub async fn login(
     Extension(config): Extension<Arc<Config>>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<(HeaderMap, Json<Value>), AppError> {
+    if payload.username.is_empty() || payload.password.is_empty() {
+        return Err(AppError::BadRequest("Username and password are required".to_string()));
+    }
+
     let conn = pool.get()?;
 
     let user = User::find_by_username(&conn, &payload.username)?
@@ -116,10 +120,18 @@ pub async fn oidc_login(
     let provider = oidc_provider
         .ok_or_else(|| AppError::InternalError("OIDC provider not initialized".to_string()))?;
 
-    let redirect_uri = format!(
-        "{}api/auth/oidc/callback",
-        config.server.base_url.trim_end_matches('/')
-    );
+    let base = config.server.base_url.trim_end_matches('/');
+    let redirect_uri = if base.starts_with("http://") || base.starts_with("https://") {
+        format!("{}/api/auth/oidc/callback", base)
+    } else {
+        // base_url is a path (e.g. "/"), construct from host:port
+        format!(
+            "http://{}:{}{}/api/auth/oidc/callback",
+            config.server.host,
+            config.server.port,
+            base
+        )
+    };
 
     // For a real deployment this would be an HTTP redirect.
     // Return the URL so the frontend can redirect.
@@ -153,10 +165,17 @@ pub async fn oidc_callback(
     let provider = oidc_provider
         .ok_or_else(|| AppError::InternalError("OIDC provider not initialized".to_string()))?;
 
-    let redirect_uri = format!(
-        "{}api/auth/oidc/callback",
-        config.server.base_url.trim_end_matches('/')
-    );
+    let base = config.server.base_url.trim_end_matches('/');
+    let redirect_uri = if base.starts_with("http://") || base.starts_with("https://") {
+        format!("{}/api/auth/oidc/callback", base)
+    } else {
+        format!(
+            "http://{}:{}{}/api/auth/oidc/callback",
+            config.server.host,
+            config.server.port,
+            base
+        )
+    };
 
     // Exchange code for token
     let access_token = provider.exchange_code(&params.code, &redirect_uri).await?;

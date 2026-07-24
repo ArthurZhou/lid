@@ -1,7 +1,6 @@
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-use crate::db::DbPool;
 use crate::error::AppError;
 
 // ── User ──────────────────────────────────────────────

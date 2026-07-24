@@ -291,7 +291,7 @@ pub async fn rename(
     Ok(Json(json!({ "data": "renamed" })))
 }
 
-/// DELETE /api/files/:path_id/:name
+/// DELETE /api/files/:path_id/delete/:name
 pub async fn delete(
     Path((path_id, name)): Path<(String, String)>,
     Extension(auth): Extension<AuthCtx>,
